@@ -47,42 +47,52 @@
 </li>
             </ul>
 
-            <!-- Right -->
-            <div class="d-flex align-items-center">
-                {% if user.is_authenticated %}
-<span class="d-none d-lg-inline nav-link fw-semibold me-2">
-    Hi, {{ user.username }}
-</span>                    <form method="post" action="{% url 'logout' %}" class="me-2">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger btn-sm">Logout</button>
-                    </form>
-                {% else %}
+          <!-- Right -->
+<div class="ms-auto mt-3 mt-lg-0">
 
-                    <button class="btn btn-outline-primary btn-sm me-2"
-                            data-bs-toggle="modal"
-                            data-bs-target="#loginModal">
-                        Login
-                    </button>
+    {% if user.is_authenticated %}
+        <div class="d-flex align-items-center gap-2 mb-2 mb-lg-0">
+            <span class="fw-semibold">Hi, {{ user.username }}</span>
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger btn-sm">Logout</button>
+            </form>
+        </div>
+    {% else %}
+        <div class="d-flex flex-column flex-lg-row gap-2 mb-2">
+            <a href="{% url 'admin:index' %}" class="btn btn-dark btn-sm">Admin</a>
 
-                    <button class="btn btn-warning btn-sm"
-                            data-bs-toggle="modal"
-                            data-bs-target="#registerModal">
-                        Register
-                    </button>
-                {% endif %}
+            <button class="btn btn-outline-primary btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#loginModal">
+                Login
+            </button>
 
-                <a class="nav-link me-3" href="{% url 'cart' %}">
-                    Cart ({{ cart_count|default:0 }})
-                </a>
+            <button class="btn btn-warning btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#registerModal">
+                Register
+            </button>
+        </div>
+    {% endif %}
 
-                <form action="{% url 'product_search' %}" method="get"
-      class="d-none d-lg-flex ms-2">
-    <input type="text" name="q" class="form-control me-2"
-           placeholder="Search products..."
-           value="{{ request.GET.q }}">
-    <button class="btn btn-warning" type="submit">Search</button>
-</form>
-            </div>
+    <!-- Cart -->
+    <a class="btn btn-outline-secondary btn-sm mb-2 w-100 w-lg-auto"
+       href="{% url 'cart' %}">
+        Cart ({{ cart_count|default:0 }})
+    </a>
+
+    <!-- Search -->
+    <form action="{% url 'product_search' %}" method="get"
+          class="d-flex gap-2">
+        <input type="text" name="q"
+               class="form-control"
+               placeholder="Search products..."
+               value="{{ request.GET.q }}">
+        <button class="btn btn-warning" type="submit">Search</button>
+    </form>
+
+</div>
 
         </div>
     </div>
