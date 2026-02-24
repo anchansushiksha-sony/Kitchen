@@ -17,12 +17,11 @@
 <body class="d-flex flex-column min-vh-100 bg-light">
 
 <!-- ================= NAVBAR ================= -->
-<nav class="navbar navbar-expand-lg bg-white shadow-sm">
-    <div class="container-fluid px-4">
+<nav class="navbar navbar-expand-lg bg-white shadow-sm py-2">    <div class="container-fluid px-4">
 
-        <a class="navbar-brand fw-bold" href="{% url 'home' %}">
-            Harsha <span class="text-warning">Home & Kitchen Appliances</span>
-        </a>
+       <a class="navbar-brand fw-bold text-warning" href="{% url 'home' %}">
+    Harsha Home & Kitchen Appliances
+</a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
@@ -77,21 +76,20 @@
     {% endif %}
 
     <!-- Cart -->
-    <a class="btn btn-outline-secondary btn-sm mb-2 w-100 w-lg-auto"
-       href="{% url 'cart' %}">
-        Cart ({{ cart_count|default:0 }})
-    </a>
+    <a href="{% url 'cart' %}" class="btn btn-outline-secondary btn-sm ms-2 d-lg-none">
+    🛒 {{ cart_count|default:0 }}
+</a>
+
 
     <!-- Search -->
-    <form action="{% url 'product_search' %}" method="get"
-          class="d-flex gap-2">
-        <input type="text" name="q"
-               class="form-control"
-               placeholder="Search products..."
-               value="{{ request.GET.q }}">
-        <button class="btn btn-warning" type="submit">Search</button>
-    </form>
-
+  <form action="{% url 'product_search' %}" method="get"
+      class="d-flex gap-2 mt-2 mt-lg-0">
+    <input type="text" name="q"
+           class="form-control"
+           placeholder="Search for products..."
+           value="{{ request.GET.q }}">
+    <button class="btn btn-warning px-3" type="submit">🔍</button>
+</form>
 </div>
 
         </div>
