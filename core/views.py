@@ -1,17 +1,19 @@
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.db.models import Q, Avg
 from django.contrib.auth.decorators import login_required
-
-from django.http import JsonResponse
 from django.conf import settings
-from .forms import RatingForm
-from products.models import Product, Category, Rating
-from core.models import Wishlist, Order, OrderItem, OrderAddress
+from django.http import JsonResponse
+from django.urls import reverse
 from django.db import transaction
 
 import razorpay
+
+from .forms import RatingForm
+from products.models import Product, Category, Rating
+from core.models import Wishlist, Order, OrderItem, OrderAddress, Customer
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -25,14 +27,13 @@ razorpay_client = razorpay.Client(
 def home(request):
     categories = Category.objects.all()
     featured_products = Product.objects.filter(is_featured=True, is_active=True)[:4]
-    new_products = Product.objects.filter(is_active=True).order_by('-created_at')[:4]  # latest products
+    new_products = Product.objects.filter(is_active=True).order_by('-created_at')[:4]
 
     return render(request, 'core/index.html', {
         'categories': categories,
         'featured_products': featured_products,
         'new_products': new_products,
     })
-
 
 
 # -------------------- STATIC PAGES --------------------
@@ -44,37 +45,60 @@ def contact(request):
     if request.method == "POST":
         messages.success(request, "Thank you! Your message has been sent.")
         return redirect("contact")
+
     return render(request, "core/contact.html")
+# -------------------- Categories --------------------
+def categories(request):
+    return render(request, 'core/categories.html')
 
 
-# -------------------- PRODUCTS --------------------
+def category_products(request, category_id):
+    category = get_object_or_404(Category, id=category_id)
 
+    products = Product.objects.filter(category=category, is_active=True)
 
-
-
-# -------------------------
-def products(request):
-    products = Product.objects.filter(is_active=True)
     wishlist_products = []
     if request.user.is_authenticated:
-        wishlist_products = Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True)
-    return render(request, 'core/products.html', {
-        'products': products,
-        'wishlist_products': wishlist_products,
+        wishlist_products = Wishlist.objects.filter(
+            user=request.user
+        ).values_list("product_id", flat=True)
+
+    return render(request, "core/category_products.html", {
+        "category": category,
+        "products": products,
+        "wishlist_products": wishlist_products
+    })
+
+# -------------------- PRODUCTS --------------------
+def product_list(request):
+    products = Product.objects.filter(is_active=True)
+
+    wishlist_products = []
+    if request.user.is_authenticated:
+        wishlist_products = Wishlist.objects.filter(
+            user=request.user
+        ).values_list('product_id', flat=True)
+
+    return render(request, "core/product_list.html", {
+        "products": products,
+        "wishlist_products": wishlist_products
     })
 
 
 def product_detail(request, product_id):
     product = get_object_or_404(Product, id=product_id)
+
     ratings = product.ratings.all()
     avg_rating = ratings.aggregate(average=Avg('value'))['average'] or 0
     avg_rating = round(avg_rating, 1)
 
     user_rating = None
     form = None
+
     if request.user.is_authenticated:
         user_rating = ratings.filter(user=request.user).first()
-        if request.method == 'POST':
+
+        if request.method == "POST":
             form = RatingForm(request.POST, instance=user_rating)
             if form.is_valid():
                 rating = form.save(commit=False)
@@ -82,6 +106,7 @@ def product_detail(request, product_id):
                 rating.user = request.user
                 rating.save()
                 return redirect('product_detail', product_id=product.id)
+
         if not form:
             form = RatingForm(instance=user_rating)
 
@@ -97,238 +122,144 @@ def product_detail(request, product_id):
 
 def product_search(request):
     query = request.GET.get('q', '').strip()
+
     results = Product.objects.filter(is_active=True)
+
     if query:
         results = results.filter(
             Q(name__icontains=query) |
             Q(description__icontains=query) |
             Q(category__name__icontains=query)
         ).distinct()
-    return render(request, 'core/search_results.html', {'query': query, 'results': results})
 
-def product_view(request):
-    products = Product.objects.all()
-    return render(request, 'core/product_list.html', {'products': products})
-
-# -------------------- AUTH --------------------
-""" def login_view(request):
-    if request.method == "POST":
-        user = authenticate(
-            request,
-            username=request.POST.get("username"),
-            password=request.POST.get("password")
-        )
-        if user:
-            login(request, user)
-            return redirect("home")
-        messages.error(request, "Invalid credentials")
-    return render(request, "core/login.html") """
+    return render(request, 'core/search_results.html', {
+        'query': query,
+        'results': results
+    })
 
 
-""" def register(request):
-    return render(request, "core/register.html")
- """
+# -------------------- CART --------------------
+@login_required(login_url='users:login')
+def cart_view(request):
 
-def logout_view(request):
-    logout(request)
-    return redirect("home")
+    order = Order.objects.filter(
+        user=request.user,
+        order_status="Pending"
+    ).first()
+
+    products = []
+    total_price = 0
+
+    if order:
+        products = OrderItem.objects.filter(order=order)
+
+        for item in products:
+            item.subtotal = item.price * item.quantity
+            total_price += item.subtotal
+
+    return render(request, "core/cart.html", {
+        "products": products,
+        "total_price": total_price
+    })
 
 
-# -------------------- CART (SESSION BASED) --------------------
-@login_required
+@login_required(login_url='users:login')
 def add_to_cart(request, product_id):
+
     product = get_object_or_404(Product, id=product_id)
 
-    cart = request.session.get('cart', {})
-    cart[str(product_id)] = cart.get(str(product_id), 0) + 1
-    request.session['cart'] = cart
+    order, created = Order.objects.get_or_create(
+        user=request.user,
+        order_status="Pending"
+    )
+
+    order_item, created = OrderItem.objects.get_or_create(
+        order=order,
+        product=product,
+        defaults={
+            "price": product.price,
+            "quantity": 1
+        }
+    )
+
+    if not created:
+        order_item.quantity += 1
+        order_item.save()
 
     return redirect('cart')
 
 
-@login_required
-def cart_view(request):
-    cart = request.session.get("cart", {})
-    items = []
-    total = 0
-
-    for product_id, qty in cart.items():
-        product = get_object_or_404(Product, id=product_id)
-        subtotal = product.price * qty
-        total += subtotal
-        items.append({
-            "product": product,
-            "quantity": qty,
-            "subtotal": subtotal
-        })
-
-    return render(request, "core/cart.html", {
-        "products": items,
-        "total_price": total
-    })
-
-
-@login_required
+@login_required(login_url='users:login')
 def cart_increase(request, product_id):
-    cart = request.session.get("cart", {})
-    cart[str(product_id)] = cart.get(str(product_id), 0) + 1
-    request.session["cart"] = cart
-    return redirect("cart")
+    item = OrderItem.objects.get(order__user=request.user, product_id=product_id)
+    item.quantity += 1
+    item.save()
+    return redirect('cart')
 
 
-@login_required
+@login_required(login_url='users:login')
 def cart_decrease(request, product_id):
-    cart = request.session.get("cart", {})
-    if str(product_id) in cart:
-        if cart[str(product_id)] > 1:
-            cart[str(product_id)] -= 1
-        else:
-            cart.pop(str(product_id))
-    request.session["cart"] = cart
-    return redirect("cart")
 
-
-@login_required
-def cart_remove(request, product_id):
-    cart = request.session.get("cart", {})
-    cart.pop(str(product_id), None)
-    request.session["cart"] = cart
-    return redirect("cart")
-
-
-# -------------------- CHECKOUT --------------------
-@login_required(login_url='login')
-@transaction.atomic
-def checkout(request):
-    cart = request.session.get("cart", {})
-    total = 0
-
-    # Calculate total
-    for pid, qty in cart.items():
-        pid = int(pid)  # 🔥 FIX #1
-        product = get_object_or_404(Product, id=pid)
-        total += product.price * qty
-
-    if request.method == "POST":
-        payment_method = request.POST.get("payment_method")
-
-        # Create order
-        order = Order.objects.create(
-            user=request.user,
-            total_amount=total,
-            payment_method=payment_method,
-            payment_status=(payment_method == "ONLINE"),
-            order_status="PAID" if payment_method == "ONLINE" else "PENDING"
-        )
-
-        # Save address
-        OrderAddress.objects.create(
-            order=order,
-            name=request.POST.get("name"),
-            phone=request.POST.get("phone"),
-            address=request.POST.get("address")
-        )
-
-        # Save order items
-        for pid, qty in cart.items():
-            pid = int(pid)  # 🔥 FIX #2
-            product = get_object_or_404(Product, id=pid)
-
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=qty,
-                price=product.price
-            )
-
-        # Clear cart
-        request.session["cart"] = {}
-
-        return redirect("order_success")
-
-    return render(request, "core/checkout.html", {
-        "total": total,
-        "RAZORPAY_KEY_ID": settings.RAZORPAY_KEY_ID
-    })
-
-# -------------------- RAZORPAY --------------------
-@login_required
-def create_payment(request):
-    cart = request.session.get("cart", {})
-    total = 0
-
-    for pid, qty in cart.items():
-        product = get_object_or_404(Product, id=pid)
-        total += product.price * qty
-
-    razorpay_order = razorpay_client.order.create({
-        "amount": int(total * 100),
-        "currency": "INR",
-        "payment_capture": 1
-    })
-
-    request.session["razorpay_amount"] = total
-    return JsonResponse(razorpay_order)
-
-
-@login_required
-def verify_payment(request):
-    total = request.session.get("razorpay_amount")
-
-    Order.objects.create(
+    order = Order.objects.filter(
         user=request.user,
-        total_amount=total,
-        payment_method="ONLINE",
-        payment_status=True,
-        order_status="PAID"
+        order_status="Pending"
+    ).first()
+
+    if not order:
+        return redirect("cart")
+
+    order_item = OrderItem.objects.filter(
+        order=order,
+        product_id=product_id
+    ).first()   # ⭐ changed from get() to first()
+
+    if order_item:
+        if order_item.quantity > 1:
+            order_item.quantity -= 1
+            order_item.save()
+        else:
+            order_item.delete()
+
+    return redirect("cart")
+
+
+
+
+
+
+@login_required(login_url='users:login')
+def cart_remove(request, product_id):
+
+    item = get_object_or_404(
+        OrderItem,
+        product_id=product_id,
+        order__user=request.user,
+        order__order_status="Pending"
     )
 
-    request.session["cart"] = {}
-    request.session.pop("razorpay_amount", None)
+    item.delete()
 
-    return redirect("order_success")
+    return redirect("cart")
 
-
-# --------------------
-# CATEGORIES
-# --------------------
-def categories(request):
-    categories = Category.objects.all()
-    return render(request, 'core/categories.html', {'categories': categories})
-
-
-def category_products(request, category_id):
-    category = get_object_or_404(Category, id=category_id)
-    products = category.products.filter(is_active=True)
-
-    wishlist_products = []
-    if request.user.is_authenticated:
-        wishlist_products = Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True)
-    return render(request, 'core/category_products.html', {
-        'category': category,
-        'products': products,
-        'wishlist_products': wishlist_products,
-    })
-
-    
-
-def categories_list(request):
-    categories = Category.objects.all()
-    return render(request, 'core/categories.html', {
-        'categories': categories
-    })
-
-
-@login_required
 def buy_now(request, product_id):
     product = get_object_or_404(Product, id=product_id)
 
-    request.session['cart'] = {str(product_id): 1}
-    return redirect('checkout')
+    # you can add order/cart logic later
+    return redirect('cart')
+# -------------------- WISHLIST --------------------
+@login_required(login_url='users:login')
+def wishlist_page(request):
+
+    wishlist = Wishlist.objects.filter(user=request.user)
+
+    return render(request, "core/wishlist.html", {
+        "wishlist": wishlist
+    })
 
 
-@login_required
+@login_required(login_url='users:login')
 def wishlist_toggle(request, product_id):
+
     product = get_object_or_404(Product, id=product_id)
 
     wishlist_item = Wishlist.objects.filter(
@@ -344,80 +275,144 @@ def wishlist_toggle(request, product_id):
             product=product
         )
 
-    # Redirect back to wishlist page
-    return redirect('wishlist_page')
+    return redirect(request.META.get('HTTP_REFERER', 'product_list'))
 
 
-@login_required
-def wishlist_page(request):
-    wishlist_items = Wishlist.objects.filter(user=request.user).select_related('product')
+# -------------------- CHECKOUT --------------------
+@login_required(login_url='users:login')
+def checkout(request):
 
-    context = {
-        'wishlist_items': wishlist_items
-    }
-    return render(request, 'core/wishlist.html', context)
+    order = Order.objects.filter(
+    user=request.user,
+    order_status="Pending"
+    ).first()
+
+    if not order:
+        return redirect("cart")
+
+    items = OrderItem.objects.filter(order=order)
+    total = sum(item.product.price * item.quantity for item in items)
+
+    return render(request, "core/checkout.html", {
+    "order": order,
+    "items": items,
+    "total": total,
+    "razorpay_key": settings.RAZORPAY_KEY_ID   # 👈 ADD THIS LINE
+})
 
 
+# -------------------- PAYMENT --------------------
+@login_required(login_url='users:login')
+def create_payment(request):
+
+    order = Order.objects.filter(
+        user=request.user,
+        order_status="Pending"
+    ).first()
+
+    if not order:
+        return JsonResponse({"error": "No order found"}, status=400)
+
+    items = OrderItem.objects.filter(order=order)
+
+    total = sum(item.product.price * item.quantity for item in items)
+
+    if total == 0:
+        return JsonResponse({"error": "Cart is empty"}, status=400)
+
+    payment = razorpay_client.order.create({
+        "amount": int(total * 100),   # ₹ → paise
+        "currency": "INR",
+        "payment_capture": "1"
+    })
+
+    return JsonResponse({
+        "id": payment["id"],
+        "amount": payment["amount"]
+    })
+@login_required(login_url='users:login')
+def verify_payment(request):
+    return redirect("order_success")
 
 
+# -------------------- SUCCESS --------------------
+def order_success(request):
+    return render(request, "core/order_success.html")
 
-#Cstmr lgn/rgstr
 
-def customer_register(request):
-    # If already logged in → go home
-    if request.user.is_authenticated:
-        return redirect('home')
+# -------------------- AUTH --------------------
+def customer_login(request):
+    next_url = request.GET.get('next') or request.POST.get('next')
+
+    # 🚫 prevent redirect loop
+    if next_url in ["/login/", "/users/login/"]:
+        next_url = None
 
     if request.method == "POST":
-        username = request.POST.get('username')
-        email = request.POST.get('email')
-        phone = request.POST.get('phone')
-        password = request.POST.get('password')
-        confirm_password = request.POST.get('confirm_password')
+        username = request.POST.get("username")
+        password = request.POST.get("password")
 
+        user = authenticate(request, username=username, password=password)
+
+        if user is not None:
+            login(request, user)
+
+            if next_url:
+                return redirect(next_url)
+
+            return redirect("product_list")
+
+        else:
+            messages.error(request, "Invalid username or password")
+
+    return render(request, "users/login.html", {"next": next_url})
+
+
+def customer_register(request):
+
+    next_url = request.POST.get("next") or request.GET.get("next")
+
+    if request.method == "POST":
+
+        username = request.POST.get("username")
+        email = request.POST.get("email")
+        password = request.POST.get("password")
+        confirm_password = request.POST.get("confirm_password")
+
+        # check passwords
         if password != confirm_password:
             messages.error(request, "Passwords do not match")
-            return redirect('customer_register')
+            return redirect("users:register") 
 
-        if User.objects.filter(username=username).exists():
-            messages.error(request, "User already exists. Please login.")
-            return redirect('customer_login')
-
+        # create user
         user = User.objects.create_user(
             username=username,
             email=email,
             password=password
         )
-        user.phone = phone
-        user.save()
 
         login(request, user)
-        messages.success(request, "Registration successful!")
-        return redirect('home')
 
-    return render(request, 'users/register.html')
+        if next_url:
+            return redirect(next_url)
 
+        return redirect("product_list")
 
-def customer_login(request):
-    if request.user.is_authenticated:
-        return redirect("home")
+    return render(request, "users/register.html", {"next": next_url})
 
-    if request.method == "POST":
-        user = authenticate(
-            request,
-            username=request.POST.get("username"),
-            password=request.POST.get("password")
-        )
-        if user:
-            login(request, user)
-            return redirect("home")
-        messages.error(request, "Invalid credentials")
-
-    return render(request, "users/login.html")
+    
 
 
 
 
-@login_required
-def order_success(request):
-    return render(request, "core/order_success.html")
+@login_required(login_url='users:login')
+def my_account(request):
+    user = request.user
+
+    orders = Order.objects.filter(user=user)
+    wishlist = Wishlist.objects.filter(user=user)
+
+    return render(request, "core/my_account.html", {
+        "orders": orders,
+        "wishlist": wishlist,
+    })

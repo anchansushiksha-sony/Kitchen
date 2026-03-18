@@ -24,8 +24,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'unsafe-secret-key')
 DEBUG = True
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
 # Application definition
 
@@ -38,8 +38,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'core',
     'products',
-    'users',
+    "jazzmin",
 
+    "users.apps.UsersConfig",
+    'django_extensions',
     'enquiries.apps.EnquiriesConfig',
 ]
 
@@ -144,6 +146,8 @@ STATICFILES_DIRS = [
 
 STATIC_ROOT = BASE_DIR / 'staticfiles'  # for collectstatic
 
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
 # --------------------------------------------------
 # MEDIA FILES
 # --------------------------------------------------
@@ -154,8 +158,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # --------------------------------------------------
 # AUTHENTICATION REDIRECTS
 # --------------------------------------------------
-LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_URL = "users:login"
+LOGIN_REDIRECT_URL = '/products/'
 LOGOUT_REDIRECT_URL = '/'
 
 

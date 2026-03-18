@@ -1,87 +1,13 @@
 from django.db import models
 from django.conf import settings
 from products.models import Product
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth import get_user_model
 
 
-# --------------------
-# CATEGORY
-# --------------------
-""" class Category(models.Model):
-    name = models.CharField(max_length=100)
-    image = models.ImageField(upload_to='categories/', blank=True, null=True)
-    slug = models.SlugField(unique=True, blank=True, null=True)
+User = get_user_model()
 
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return self.name  """
-
-# --------------------
-# PRODUCT
-# --------------------
-""" class Product(models.Model):
-    category = models.ForeignKey(Category,related_name='products',on_delete=models.CASCADE)
-    name = models.CharField(max_length=200)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    image = models.ImageField(upload_to='products/', blank=True, null=True)
-    description = models.TextField(blank=True)
-    is_active = models.BooleanField(default=True)
-    featured = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.name
-
-    # Average rating using related_name
-    def average_rating(self):
-        ratings = self.ratings.all()  # use related_name='ratings' in Rating
-        if ratings.exists():
-            return round(sum(r.value for r in ratings) / ratings.count(), 1)
-        return 0 
- """
-
-
-
-""" class Product(models.Model):
-    category = models.ForeignKey(
-        'Category',
-        related_name='products',
-        on_delete=models.CASCADE
-    )
-    name = models.CharField(max_length=200)
-    description = models.TextField(blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    image = models.ImageField(upload_to='products/', null=True, blank=True)
-    is_featured = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)  # <- align with other fields
-
-    def __str__(self):
-        return self.name """
-
-# --------------------
-# RATING
-# --------------------
-""" class Rating(models.Model):
-    product = models.ForeignKey(
-        Product,
-        on_delete=models.CASCADE,
-        related_name='ratings'  # <-- important fix
-    )
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    value = models.PositiveSmallIntegerField()  # 1 to 5
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('product', 'user')  # one rating per user per product
-
-    def __str__(self):
-        return f"{self.user.username} - {self.product.name} ({self.value})"
-
- """
  # --------------------
 # CART
 # --------------------
@@ -91,7 +17,7 @@ class Cart(models.Model):
         on_delete=models.CASCADE
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     @property
     def total_price(self):
@@ -129,16 +55,17 @@ class Order(models.Model):
         ('CANCELLED', 'Cancelled'),
     )
 
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE
-    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='COD')
     payment_status = models.BooleanField(default=False)
     order_status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='PENDING')
+
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"Order #{self.id} - {self.user.username}"
@@ -150,7 +77,7 @@ class Order(models.Model):
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.PositiveIntegerField()
+    quantity = models.PositiveIntegerField(default=1)  # 👈 IMPORTANT
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
     def __str__(self):
@@ -185,13 +112,40 @@ class Wishlist(models.Model):
 
 
 class Customer(models.Model):
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        related_name="customer"
     )
 
     phone = models.CharField(max_length=15, blank=True, null=True)
-    # Add other fields as needed
+
+    address = models.TextField(blank=True, null=True)
+
+    city = models.CharField(max_length=100, blank=True, null=True)
+
+    state = models.CharField(max_length=100, blank=True, null=True)
+
+    pincode = models.CharField(max_length=10, blank=True, null=True)
+
+    country = models.CharField(max_length=100, default="India")
+
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.user.username
+        return f"{self.user.username} Customer"
+
+# ----------------------------
+# Automatically Create Customer
+# ----------------------------
+@receiver(post_save, sender=User)
+def create_customer(sender, instance, created, **kwargs):
+    if created:
+        Customer.objects.get_or_create(user=instance)
+
+
+@receiver(post_save, sender=User)
+def save_customer(sender, instance, **kwargs):
+    if hasattr(instance, "customer"):
+        instance.customer.save()

@@ -31,7 +31,7 @@
                     </button>
                 </form>
                 {% else %}
-                <a href="{% url 'login' %}" class="position-absolute top-0 end-0 m-2 text-decoration-none text-danger fs-5">
+                <a href="{% url 'users:login' %}" class="position-absolute top-0 end-0 m-2 text-decoration-none text-danger fs-5">
                     ♡
                 </a>
                 {% endif %}
@@ -64,13 +64,10 @@
             <div class="d-flex gap-3 mt-4">
 
                 <!-- Add to Cart -->
-                <form method="POST" action="{% url 'add_to_cart' product.id %}">
-                    {% csrf_token %}
-                    <button class="btn btn-warning btn-lg">
-                        🛒 Add to Cart
-                    </button>
-                </form>
-
+<a href="{% url 'add_to_cart' product.id %}?next={{ request.path }}"
+   class="btn btn-primary">
+   Add to Cart
+</a>
                 <!-- Buy Now -->
                 <form method="POST" action="{% url 'buy_now' product.id %}">
                     {% csrf_token %}

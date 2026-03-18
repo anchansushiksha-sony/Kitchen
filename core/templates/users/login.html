@@ -5,8 +5,10 @@
     <div class="card p-4 shadow" style="max-width: 400px; width: 100%;">
         <h4 class="text-center mb-3">Login</h4>
 
-        <form method="post">
+        <form method="post" action="{% url 'users:login' %}">
             {% csrf_token %}
+
+            <input type="hidden" name="next" value="{{ next|default:'' }}">
 
             <div class="mb-3">
                 <label class="form-label">Username</label>
@@ -21,9 +23,17 @@
             <button class="btn btn-warning w-100">Login</button>
         </form>
 
-         <p class="text-center mt-3 mb-0">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-danger mt-3">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <p class="text-center mt-3 mb-0">
             New customer?
-            <a href="{% url 'users:customer_register' %}">
+            <a href="{% url 'users:register' %}?next={{ next }}">
                 Create your account
             </a>
         </p>

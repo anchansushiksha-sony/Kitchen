@@ -1,8 +1,10 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q
+from django.urls import reverse
 from core.models import Wishlist
 from .models import Product
-
+from django.contrib.auth.decorators import login_required
+from core.models import Order, OrderItem
 
 def products(request):
     products = Product.objects.filter(is_active=True)
@@ -64,3 +66,26 @@ def product_detail(request, id):
         'wishlist_products': wishlist_products,
     })
     
+
+@login_required(login_url='users:login')
+def add_to_cart(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+
+    order, created = Order.objects.get_or_create(
+        user=request.user,
+        order_status="Pending"
+    )
+
+    item, created = OrderItem.objects.get_or_create(
+        order=order,
+        product=product
+    )
+
+    if not created:
+        item.quantity += 1
+        item.save()
+
+    # 🔁 return to SAME page
+    return redirect(request.GET.get("next", "/products/"))
+
+

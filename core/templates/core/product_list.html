@@ -31,6 +31,12 @@
                        class="btn btn-warning btn-sm">
                         View Details
                     </a>
+
+                    <a href="{% url 'add_to_cart' product.id %}?next={{ request.path }}"
+                      class="btn btn-success btn-sm">
+                     Add to Cart
+                    </a>
+
                 </div>
 
             </div>
