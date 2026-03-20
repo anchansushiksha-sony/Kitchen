@@ -283,8 +283,8 @@ def wishlist_toggle(request, product_id):
 def checkout(request):
 
     order = Order.objects.filter(
-    user=request.user,
-    order_status="Pending"
+        user=request.user,
+        order_status="Pending"
     ).first()
 
     if not order:
@@ -293,14 +293,34 @@ def checkout(request):
     items = OrderItem.objects.filter(order=order)
     total = sum(item.product.price * item.quantity for item in items)
 
+    # ✅ HANDLE FORM SUBMIT
+    if request.method == "POST":
+        print("ORDER RECEIVED ✅")   # debug
+
+        name = request.POST.get('name')
+        phone = request.POST.get('phone')
+        address = request.POST.get('address')
+        payment_method = request.POST.get('payment_method')
+
+        print(name, phone, address, payment_method)
+
+        # ✅ SAVE DATA
+        order.name = name
+        order.phone = phone
+        order.address = address
+        order.payment_method = payment_method
+        order.order_status = "Placed"
+        order.save()
+
+        # ✅ redirect after order
+        return redirect('order_success')
+
     return render(request, "core/checkout.html", {
-    "order": order,
-    "items": items,
-    "total": total,
-    "razorpay_key": settings.RAZORPAY_KEY_ID   # 👈 ADD THIS LINE
-})
-
-
+        "order": order,
+        "items": items,
+        "total": total,
+        "razorpay_key": settings.RAZORPAY_KEY_ID
+    })
 # -------------------- PAYMENT --------------------
 @login_required(login_url='users:login')
 def create_payment(request):
@@ -330,6 +350,8 @@ def create_payment(request):
         "id": payment["id"],
         "amount": payment["amount"]
     })
+
+    
 @login_required(login_url='users:login')
 def verify_payment(request):
     return redirect("order_success")

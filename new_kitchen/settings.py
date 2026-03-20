@@ -23,12 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'unsafe-secret-key')
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
-
-# Application definition
-
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "sushiksha.pythonanywhere.com"]
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -164,7 +161,26 @@ LOGOUT_REDIRECT_URL = '/'
 
 
 # --------------------------------------------------
-# DEFAULT PRIMARY KEY
+# DEFAULT PRIMARY KEYDisallowedHost at /
+# Request URL:	https://sushiksha.pythonanywhere.com/
+# Django Version:	5.2.12
+# Exception Type:	DisallowedHost
+# Exception Value:	
+# Invalid HTTP_HOST header: 'sushiksha.pythonanywhere.com'. You may need to add 'sushiksha.pythonanywhere.com' to ALLOWED_HOSTS.
+# Exception Location:	/home/Sushiksha/kitchen-project/venv_jazzmin/lib/python3.10/site-packages/django/http/request.py, line 202, in get_host
+# Raised during:	core.views.home
+# Python Executable:	/usr/local/bin/uwsgi
+# Python Version:	3.10.12
+# Python Path:	
+# ['/var/www',
+#  '.',
+#  '',
+#  '/var/www',
+#  '/usr/lib/python310.zip',
+#  '/usr/lib/python3.10',
+#  '/usr/lib/python3.10/lib-dynload',
+#  '/home/Sushiksha/kitchen-project/venv_jazzmin/lib/python3.10/site-packages',
+#  '/home/Sushiksha/kitchen-project']
 # --------------------------------------------------
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
