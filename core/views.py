@@ -12,7 +12,7 @@ from django.db import transaction
 import razorpay
 
 from .forms import RatingForm
-from products.models import Product, Category, Rating
+from products.models import Category, Product
 from core.models import Wishlist, Order, OrderItem, OrderAddress, Customer
 from django.contrib.auth import get_user_model
 
@@ -321,6 +321,7 @@ def checkout(request):
         "total": total,
         "razorpay_key": settings.RAZORPAY_KEY_ID
     })
+
 # -------------------- PAYMENT --------------------
 @login_required(login_url='users:login')
 def create_payment(request):
